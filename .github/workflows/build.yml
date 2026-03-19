@@ -18,12 +18,6 @@ jobs:
         with:
           flutter-version: '3.19.0'
           channel: 'stable'
-      - name: Create Flutter project scaffold
-        run: |
-          flutter create --org com.drrandom.elsewhere --project-name elsewhere temp_project
-          cp -r temp_project/android .
-          cp -r temp_project/ios .
-          rm -rf temp_project
       - run: flutter pub get
       - run: flutter build apk --debug
       - uses: actions/upload-artifact@v4
