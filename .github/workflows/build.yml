@@ -26,7 +26,7 @@ jobs:
           ls $GITHUB_WORKSPACE
       - run: flutter pub get
       - name: Build APK
-        run: flutter build apk --debug --no-shrink
+        run: flutter build apk --debug --yes
       - uses: actions/upload-artifact@v4
         with:
           name: elsewhere-debug.apk
