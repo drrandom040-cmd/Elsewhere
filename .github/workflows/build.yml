@@ -18,8 +18,15 @@ jobs:
         with:
           flutter-version: '3.19.0'
           channel: 'stable'
+      - name: Setup Flutter project
+        run: |
+          flutter create --org com.drrandom.elsewhere --project-name elsewhere /tmp/scaffold
+          cp -r /tmp/scaffold/android $GITHUB_WORKSPACE/android
+          cp -r /tmp/scaffold/ios $GITHUB_WORKSPACE/ios
+          ls $GITHUB_WORKSPACE
       - run: flutter pub get
-      - run: flutter build apk --debug
+      - name: Build APK
+        run: flutter build apk --debug --no-shrink
       - uses: actions/upload-artifact@v4
         with:
           name: elsewhere-debug.apk
