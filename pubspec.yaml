@@ -1,0 +1,48 @@
+name: elsewhere
+description: A writing companion app for novelists, storytellers, and article writers.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Google Sign In
+  google_sign_in: ^6.2.1
+  # Audio playback
+  just_audio: ^0.9.36
+  # File picker for importing audio/images
+  file_picker: ^6.1.1
+  # Image picker from device gallery
+  image_picker: ^1.0.7
+  # YouTube player
+  youtube_player_flutter: ^9.0.2
+  # Shared preferences for storing settings
+  shared_preferences: ^2.2.2
+  # Device apps (for focus/lock mode)
+  flutter_windowmanager: ^0.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+
+  # Add fonts here when you have GeneralSans font files
+  # fonts:
+  #   - family: GeneralSans
+  #     fonts:
+  #       - asset: assets/fonts/GeneralSans-Regular.otf
+  #       - asset: assets/fonts/GeneralSans-Medium.otf
+  #         weight: 500
+  #       - asset: assets/fonts/GeneralSans-Bold.otf
+  #         weight: 700
+  #       - asset: assets/fonts/GeneralSans-Extrabold.otf
+  #         weight: 800
+
+  assets:
+    - assets/images/
