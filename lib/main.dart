@@ -27,17 +27,61 @@ class ElsewhereApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.homeTheme,
       initialRoute: '/login',
-      routes: {
-        '/login': (context) => const LoginScreen(),
-        '/home': (context) => const HomeScreen(),
-        '/novels': (context) => const NovelsScreen(),
-        '/short-stories': (context) => const ShortStoriesScreen(),
-        '/articles': (context) => const ArticlesScreen(),
-        '/create-project': (context) => const CreateProjectScreen(),
-        '/novel-workspace': (context) => const NovelWorkspaceScreen(),
-        '/audio-player': (context) => const AudioPlayerScreen(),
-        '/gallery': (context) => const GalleryScreen(),
+      onGenerateRoute: (settings) {
+        Widget page;
+        switch (settings.name) {
+          case '/login':
+            page = const LoginScreen();
+            break;
+          case '/home':
+            page = const HomeScreen();
+            break;
+          case '/novels':
+            page = const NovelsScreen();
+            break;
+          case '/short-stories':
+            page = const ShortStoriesScreen();
+            break;
+          case '/articles':
+            page = const ArticlesScreen();
+            break;
+          case '/create-project':
+            page = CreateProjectScreen(initialType: settings.arguments as String?);
+            break;
+          case '/novel-workspace':
+            page = NovelWorkspaceScreen(project: settings.arguments as Map<String, String>?);
+            break;
+          case '/audio-player':
+            page = const AudioPlayerScreen();
+            break;
+          case '/gallery':
+            page = const GalleryScreen();
+            break;
+          default:
+            page = const HomeScreen();
+        }
+        return ZoomFadeRoute(page: page);
       },
     );
   }
+}
+
+class ZoomFadeRoute extends PageRouteBuilder {
+  final Widget page;
+  ZoomFadeRoute({required this.page})
+      : super(
+          transitionDuration: const Duration(milliseconds: 350),
+          reverseTransitionDuration: const Duration(milliseconds: 250),
+          pageBuilder: (context, animation, secondaryAnimation) => page,
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+            return FadeTransition(
+              opacity: curved,
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 0.92, end: 1.0).animate(curved),
+                child: child,
+              ),
+            );
+          },
+        );
 }
