@@ -65,7 +65,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> with TickerPr
       'genre': _genreController.text,
       'description': _descController.text,
       'type': selectedType ?? 'novel',
-      'wordCount': selectedWordCount?.toString() ?? customWordCount ? _customWCController.text : '50000',
+      'wordCount': selectedWordCount?.toString() ?? (customWordCount ? _customWCController.text : '50000'),
       'words': '0',
     };
     Navigator.pushReplacementNamed(context, '/novel-workspace', arguments: project);
