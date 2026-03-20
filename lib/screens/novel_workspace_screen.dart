@@ -657,8 +657,8 @@ class WorldMapScreen extends StatefulWidget {
 class _WorldMapScreenState extends State<WorldMapScreen> {
   final List<Map<String, dynamic>> _nodes = [
     {'label': 'Chapter 1', 'x': 0.2, 'y': 0.2, 'color': AppColors.novelAccent1},
-    {'label': 'Floyd', 'x': 0.5, 'y': 0.4, 'color': Color(0xFF7030EF)},
-    {'label': 'Manchester', 'x': 0.75, 'y': 0.3, 'color': Color(0xFFFF6B6B)},
+    {'label': 'Floyd', 'x': 0.5, 'y': 0.4, 'color': const Color(0xFF7030EF)},
+    {'label': 'Manchester', 'x': 0.75, 'y': 0.3, 'color': const Color(0xFFFF6B6B)},
   ];
 
   @override
@@ -774,7 +774,7 @@ class _LocationsScreenState extends State<LocationsScreen> {
         leading: IconButton(icon: const Icon(Icons.arrow_back_rounded, color: Colors.white), onPressed: () => Navigator.pop(context)),
         title: const Text('Locations', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
         actions: [
-          IconButton(icon: const Icon(Icons.add_rounded, color: const Color(0xFFFF6B6B)),
+          IconButton(icon: const Icon(Icons.add_rounded, color: Color(0xFFFF6B6B)),
             onPressed: () => _addLocation(context)),
         ],
       ),
