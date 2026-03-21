@@ -270,6 +270,10 @@ class ProjectStore {
     await _box?.put(project.id, project);
   }
 
+  Future<void> addProject(ProjectModel project) async {
+    await saveProject(project);
+  }
+
   Future<void> deleteProject(String id) async {
     await _box?.delete(id);
   }
