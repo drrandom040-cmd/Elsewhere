@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../models/project_model.dart';
+import 'novel_workspace_screen.dart';
+import 'short_stories_screen.dart';
+import 'articles_screen.dart';
 
 class CreateProjectScreen extends StatefulWidget {
   final String? initialType;
@@ -56,19 +60,51 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> with TickerPr
   void _createProject() {
     if (_nameController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a project name')),
-      );
+        const SnackBar(content: Text('Please enter a project name')));
       return;
     }
-    final project = {
-      'title': _nameController.text,
-      'genre': _genreController.text,
-      'description': _descController.text,
-      'type': selectedType ?? 'novel',
-      'wordCount': selectedWordCount?.toString() ?? (customWordCount ? _customWCController.text : '50000'),
-      'words': '0',
-    };
-    Navigator.pushReplacementNamed(context, '/novel-workspace', arguments: project);
+
+    final goalWC = selectedWordCount ?? (customWordCount ? int.tryParse(_customWCController.text) ?? 50000 : 50000);
+
+    final project = ProjectModel(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      title: _nameController.text,
+      type: selectedType ?? 'novel',
+      genre: _genreController.text,
+      description: _descController.text,
+      goalWordCount: goalWC,
+    );
+
+    ProjectStore().addProject(project);
+
+    if (selectedType == 'novel') {
+      Navigator.pushReplacement(context, PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 350),
+        pageBuilder: (_, __, ___) => NovelWorkspaceScreen(project: project),
+        transitionsBuilder: (_, anim, __, child) {
+          final c = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+          return FadeTransition(opacity: c, child: ScaleTransition(scale: Tween<double>(begin: 0.93, end: 1.0).animate(c), child: child));
+        },
+      ));
+    } else if (selectedType == 'short_story') {
+      Navigator.pushReplacement(context, PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 350),
+        pageBuilder: (_, __, ___) => ShortStoryWorkspaceScreen(project: project),
+        transitionsBuilder: (_, anim, __, child) {
+          final c = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+          return FadeTransition(opacity: c, child: ScaleTransition(scale: Tween<double>(begin: 0.93, end: 1.0).animate(c), child: child));
+        },
+      ));
+    } else {
+      Navigator.pushReplacement(context, PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 350),
+        pageBuilder: (_, __, ___) => ArticleWorkspaceScreen(project: project),
+        transitionsBuilder: (_, anim, __, child) {
+          final c = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+          return FadeTransition(opacity: c, child: ScaleTransition(scale: Tween<double>(begin: 0.93, end: 1.0).animate(c), child: child));
+        },
+      ));
+    }
   }
 
   @override
@@ -97,11 +133,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> with TickerPr
         opacity: _fadeAnimation,
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 300),
-          child: _step == 0
-              ? _buildTypeSelection()
-              : _step == 1
-                  ? _buildWordCountSelection()
-                  : _buildDetailsForm(),
+          child: _step == 0 ? _buildTypeSelection() : _step == 1 ? _buildWordCountSelection() : _buildDetailsForm(),
         ),
       ),
     );
@@ -111,32 +143,27 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> with TickerPr
     return Padding(
       key: const ValueKey(0),
       padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Select Type',
-              style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          Text('What kind of project is this?',
-              style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14)),
-          const SizedBox(height: 32),
-          _TypeCard(title: 'Novel', subtitle: '50,000+ words', icon: Icons.menu_book_rounded,
-              color: AppColors.novelAccent1, selected: selectedType == 'novel',
-              onTap: () => setState(() => selectedType = 'novel')),
-          const SizedBox(height: 16),
-          _TypeCard(title: 'Short Story', subtitle: 'Under 10,000 words', icon: Icons.short_text_rounded,
-              color: AppColors.storyAccent1, selected: selectedType == 'short_story',
-              onTap: () => setState(() => selectedType = 'short_story')),
-          const SizedBox(height: 16),
-          _TypeCard(title: 'Article', subtitle: 'Essays & non-fiction', icon: Icons.article_rounded,
-              color: AppColors.articleAccent2, selected: selectedType == 'article',
-              onTap: () => setState(() => selectedType = 'article')),
-          const Spacer(),
-          if (selectedType != null)
-            _PrimaryButton(label: 'Continue', onTap: _next,
-                gradient: const LinearGradient(colors: [AppColors.homeAccent1, AppColors.homeAccent2])),
-        ],
-      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Select Type', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        Text('What kind of project is this?', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14)),
+        const SizedBox(height: 32),
+        _TypeCard(title: 'Novel', subtitle: '50,000+ words', icon: Icons.menu_book_rounded,
+            color: AppColors.novelAccent1, selected: selectedType == 'novel',
+            onTap: () => setState(() => selectedType = 'novel')),
+        const SizedBox(height: 16),
+        _TypeCard(title: 'Short Story', subtitle: 'Under 10,000 words', icon: Icons.short_text_rounded,
+            color: AppColors.storyAccent1, selected: selectedType == 'short_story',
+            onTap: () => setState(() => selectedType = 'short_story')),
+        const SizedBox(height: 16),
+        _TypeCard(title: 'Article', subtitle: 'Essays & non-fiction', icon: Icons.article_rounded,
+            color: AppColors.articleAccent2, selected: selectedType == 'article',
+            onTap: () => setState(() => selectedType = 'article')),
+        const Spacer(),
+        if (selectedType != null)
+          _PrimaryButton(label: 'Continue', onTap: _next,
+              gradient: const LinearGradient(colors: [AppColors.homeAccent1, AppColors.homeAccent2])),
+      ]),
     );
   }
 
@@ -144,61 +171,50 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> with TickerPr
     return Padding(
       key: const ValueKey(1),
       padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Select Word Count',
-              style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          Text('Set your writing goal',
-              style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14)),
-          const SizedBox(height: 32),
-          _WordCountOption(label: '50,000 words', value: 50000,
-              selected: selectedWordCount == 50000,
-              onTap: () => setState(() { selectedWordCount = 50000; customWordCount = false; })),
-          const SizedBox(height: 12),
-          _WordCountOption(label: '100,000 words', value: 100000,
-              selected: selectedWordCount == 100000,
-              onTap: () => setState(() { selectedWordCount = 100000; customWordCount = false; })),
-          const SizedBox(height: 12),
-          GestureDetector(
-            onTap: () => setState(() { customWordCount = true; selectedWordCount = null; }),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: customWordCount ? AppColors.novelAccent1.withOpacity(0.15) : AppColors.novelSurface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: customWordCount ? AppColors.novelAccent1 : Colors.white12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Type Your Own',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15)),
-                  if (customWordCount) ...[
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _customWCController,
-                      keyboardType: TextInputType.number,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        hintText: 'Enter word count',
-                        hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
-                        border: InputBorder.none,
-                      ),
-                    ),
-                  ]
-                ],
-              ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Select Word Count', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        Text('Set your writing goal', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14)),
+        const SizedBox(height: 32),
+        _WordCountOption(label: '50,000 words', value: 50000, selected: selectedWordCount == 50000,
+            onTap: () => setState(() { selectedWordCount = 50000; customWordCount = false; })),
+        const SizedBox(height: 12),
+        _WordCountOption(label: '100,000 words', value: 100000, selected: selectedWordCount == 100000,
+            onTap: () => setState(() { selectedWordCount = 100000; customWordCount = false; })),
+        const SizedBox(height: 12),
+        GestureDetector(
+          onTap: () => setState(() { customWordCount = true; selectedWordCount = null; }),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: customWordCount ? AppColors.novelAccent1.withOpacity(0.15) : AppColors.novelSurface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: customWordCount ? AppColors.novelAccent1 : Colors.white12),
             ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Type Your Own', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15)),
+              if (customWordCount) ...[
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _customWCController,
+                  keyboardType: TextInputType.number,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'Enter word count',
+                    hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
+                    border: InputBorder.none,
+                  ),
+                ),
+              ]
+            ]),
           ),
-          const Spacer(),
-          if (selectedWordCount != null || customWordCount)
-            _PrimaryButton(label: 'Continue', onTap: _next,
-                gradient: const LinearGradient(colors: [AppColors.novelAccent2, AppColors.novelAccent1])),
-        ],
-      ),
+        ),
+        const Spacer(),
+        if (selectedWordCount != null || customWordCount)
+          _PrimaryButton(label: 'Continue', onTap: _next,
+              gradient: const LinearGradient(colors: [AppColors.novelAccent2, AppColors.novelAccent1])),
+      ]),
     );
   }
 
@@ -209,44 +225,37 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> with TickerPr
     return SingleChildScrollView(
       key: const ValueKey(2),
       padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            selectedType == 'novel' ? 'Novel Details'
-                : selectedType == 'short_story' ? 'Story Details' : 'Article Details',
-            style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 32),
-          _FormField(label: 'Name', controller: _nameController, hint: 'Project title'),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(
+          selectedType == 'novel' ? 'Novel Details' : selectedType == 'short_story' ? 'Story Details' : 'Article Details',
+          style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 32),
+        _FormField(label: 'Name', controller: _nameController, hint: 'Project title'),
+        const SizedBox(height: 20),
+        if (!isArticle) ...[
+          _FormField(label: 'Genre', controller: _genreController, hint: 'e.g. Thriller, Fantasy...'),
           const SizedBox(height: 20),
-          if (!isArticle) ...[
-            _FormField(label: 'Genre', controller: _genreController, hint: 'e.g. Thriller, Fantasy...'),
-            const SizedBox(height: 20),
-          ],
-          if (isShortStory)
-            _FormField(label: 'Logline', controller: _descController,
-                hint: 'One sentence summary', maxLines: 2),
-          if (!isShortStory && !isArticle)
-            _FormField(label: 'Description', controller: _descController,
-                hint: 'Brief description...', maxLines: 4),
-          if (isArticle)
-            _FormField(label: 'Synopsis', controller: _descController,
-                hint: 'What is this article about?', maxLines: 4),
-          const SizedBox(height: 40),
-          _PrimaryButton(
-            label: 'Create Project',
-            onTap: _createProject,
-            gradient: LinearGradient(
-              colors: isArticle
-                  ? [AppColors.articleAccent1, AppColors.articleAccent2]
-                  : isShortStory
-                      ? [AppColors.storyAccent2, AppColors.storyAccent1]
-                      : [AppColors.novelAccent2, AppColors.novelAccent1],
-            ),
-          ),
         ],
-      ),
+        if (isShortStory)
+          _FormField(label: 'Logline', controller: _descController, hint: 'One sentence summary', maxLines: 2),
+        if (!isShortStory && !isArticle)
+          _FormField(label: 'Description', controller: _descController, hint: 'Brief description...', maxLines: 4),
+        if (isArticle)
+          _FormField(label: 'Synopsis', controller: _descController, hint: 'What is this article about?', maxLines: 4),
+        const SizedBox(height: 40),
+        _PrimaryButton(
+          label: 'Create Project',
+          onTap: _createProject,
+          gradient: LinearGradient(
+            colors: isArticle
+                ? [AppColors.articleAccent1, AppColors.articleAccent2]
+                : isShortStory
+                    ? [AppColors.storyAccent2, AppColors.storyAccent1]
+                    : [AppColors.novelAccent2, AppColors.novelAccent1],
+          ),
+        ),
+      ]),
     );
   }
 }
@@ -255,21 +264,15 @@ class _PrimaryButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
   final Gradient gradient;
-
   const _PrimaryButton({required this.label, required this.onTap, required this.gradient});
-
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: double.infinity,
-        height: 56,
+        width: double.infinity, height: 56,
         decoration: BoxDecoration(gradient: gradient, borderRadius: BorderRadius.circular(16)),
-        child: Center(
-          child: Text(label,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
-        ),
+        child: Center(child: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16))),
       ),
     );
   }
@@ -281,10 +284,7 @@ class _TypeCard extends StatelessWidget {
   final Color color;
   final bool selected;
   final VoidCallback onTap;
-
-  const _TypeCard({required this.title, required this.subtitle, required this.icon,
-      required this.color, required this.selected, required this.onTap});
-
+  const _TypeCard({required this.title, required this.subtitle, required this.icon, required this.color, required this.selected, required this.onTap});
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -297,18 +297,16 @@ class _TypeCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: selected ? color : Colors.white12, width: selected ? 2 : 1),
         ),
-        child: Row(
-          children: [
-            Icon(icon, color: color, size: 28),
-            const SizedBox(width: 16),
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
-              Text(subtitle, style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13)),
-            ]),
-            const Spacer(),
-            if (selected) Icon(Icons.check_circle_rounded, color: color),
-          ],
-        ),
+        child: Row(children: [
+          Icon(icon, color: color, size: 28),
+          const SizedBox(width: 16),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+            Text(subtitle, style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13)),
+          ]),
+          const Spacer(),
+          if (selected) Icon(Icons.check_circle_rounded, color: color),
+        ]),
       ),
     );
   }
@@ -319,9 +317,7 @@ class _WordCountOption extends StatelessWidget {
   final int value;
   final bool selected;
   final VoidCallback onTap;
-
   const _WordCountOption({required this.label, required this.value, required this.selected, required this.onTap});
-
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -334,13 +330,11 @@ class _WordCountOption extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: selected ? AppColors.novelAccent1 : Colors.white12),
         ),
-        child: Row(
-          children: [
-            Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15)),
-            const Spacer(),
-            if (selected) const Icon(Icons.check_circle_rounded, color: AppColors.novelAccent1),
-          ],
-        ),
+        child: Row(children: [
+          Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15)),
+          const Spacer(),
+          if (selected) const Icon(Icons.check_circle_rounded, color: AppColors.novelAccent1),
+        ]),
       ),
     );
   }
@@ -350,31 +344,25 @@ class _FormField extends StatelessWidget {
   final String label, hint;
   final TextEditingController controller;
   final int maxLines;
-
   const _FormField({required this.label, required this.controller, required this.hint, this.maxLines = 1});
-
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 13, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 8),
-        TextField(
-          controller: controller,
-          maxLines: maxLines,
-          style: const TextStyle(color: Colors.white),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
-            filled: true,
-            fillColor: AppColors.homeSurface,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white12)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white12)),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.homeAccent1)),
-          ),
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 13, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 8),
+      TextField(
+        controller: controller,
+        maxLines: maxLines,
+        style: const TextStyle(color: Colors.white),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+          filled: true, fillColor: AppColors.homeSurface,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white12)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white12)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.homeAccent1)),
         ),
-      ],
-    );
+      ),
+    ]);
   }
 }
