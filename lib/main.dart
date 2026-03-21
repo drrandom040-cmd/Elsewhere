@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'models/project_model.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/novels_screen.dart';
@@ -49,7 +50,7 @@ class ElsewhereApp extends StatelessWidget {
             page = CreateProjectScreen(initialType: settings.arguments as String?);
             break;
           case '/novel-workspace':
-            page = NovelWorkspaceScreen(project: settings.arguments as Map<String, String>?);
+            page = NovelWorkspaceScreen(project: settings.arguments as ProjectModel?);
             break;
           case '/audio-player':
             page = const AudioPlayerScreen();
