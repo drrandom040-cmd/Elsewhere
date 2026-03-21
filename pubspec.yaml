@@ -12,7 +12,7 @@ dependencies:
 
   # Firebase
   firebase_core: ^2.27.0
-  firebase_auth: ^4.17.0
+  firebase_auth: ^4.16.0
   cloud_firestore: ^4.15.0
   google_sign_in: ^6.2.1
 
@@ -25,7 +25,7 @@ dependencies:
   audio_session: ^0.1.18
 
   # File & Image picking
-  file_picker: ^8.1.2
+  file_picker: ^8.0.7
   image_picker: ^1.0.7
   image: ^4.1.3
 
