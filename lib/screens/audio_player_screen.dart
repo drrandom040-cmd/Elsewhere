@@ -47,7 +47,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
 
     final file = result.files.first;
     final track = AudioTrack(
-      id: const Uuid().v4(),
+      id: Uuid().v4(),
       title: file.name.replaceAll(RegExp(r'\.[^.]+$'), ''),
       source: 'local',
       path: file.path ?? '',
@@ -77,7 +77,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTicker
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: Colors.white38))),
         TextButton(onPressed: () async {
           if (ctrl.text.isNotEmpty) {
-            final track = AudioTrack(id: const Uuid().v4(), title: 'YouTube Track', source: 'youtube', path: ctrl.text);
+            final track = AudioTrack(id: Uuid().v4(), title: 'YouTube Track', source: 'youtube', path: ctrl.text);
             await _store.addAudioTrack(track);
             setState(() {});
             Navigator.pop(context);
