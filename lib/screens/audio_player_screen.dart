@@ -1,360 +1,340 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:just_audio/just_audio.dart';
+import 'package:image_picker/image_picker.dart';
 import '../theme/app_theme.dart';
+import '../widgets/persistent_audio_bar.dart';
 import '../models/project_model.dart';
 import 'package:uuid/uuid.dart';
 
-class AudioPlayerScreen extends StatefulWidget {
-  const AudioPlayerScreen({super.key});
+class GalleryScreen extends StatefulWidget {
+  const GalleryScreen({super.key});
 
   @override
-  State<AudioPlayerScreen> createState() => _AudioPlayerScreenState();
+  State<GalleryScreen> createState() => _GalleryScreenState();
 }
 
-class _AudioPlayerScreenState extends State<AudioPlayerScreen> with SingleTickerProviderStateMixin {
-  bool _showPlayer = false;
-  int _currentIndex = 0;
+class _GalleryScreenState extends State<GalleryScreen> with SingleTickerProviderStateMixin {
+  String _selectedTag = 'All';
+  final List<String> _tags = ['All', 'Character', 'Location', 'Mood', 'Reference'];
   final _store = ProjectStore();
-  final _player = AudioPlayer();
-  bool _isPlaying = false;
-  Duration _position = Duration.zero;
-  Duration _duration = Duration.zero;
-  late AnimationController _pulseController;
+  late AnimationController _fadeController;
+  late Animation<double> _fadeAnim;
 
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
-
-    _player.positionStream.listen((pos) { if (mounted) setState(() => _position = pos); });
-    _player.durationStream.listen((dur) { if (mounted) setState(() => _duration = dur ?? Duration.zero); });
-    _player.playerStateStream.listen((state) {
-      if (mounted) setState(() => _isPlaying = state.playing);
-    });
+    _fadeController = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
+    _fadeAnim = CurvedAnimation(parent: _fadeController, curve: Curves.easeOut);
+    _fadeController.forward();
   }
 
   @override
   void dispose() {
-    _pulseController.dispose();
-    _player.dispose();
+    _fadeController.dispose();
     super.dispose();
   }
 
-  Future<void> _addLocalFile() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.audio);
-    if (result == null || result.files.isEmpty) return;
+  List<GalleryItem> get _filteredItems {
+    if (_selectedTag == 'All') return _store.galleryItems;
+    return _store.galleryItems.where((item) => item.tags.contains(_selectedTag)).toList();
+  }
 
-    final file = result.files.first;
-    final track = AudioTrack(
+  Future<void> _addImage() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    if (picked == null) return;
+
+    final item = GalleryItem(
       id: Uuid().v4(),
-      title: file.name.replaceAll(RegExp(r'\.[^.]+$'), ''),
-      source: 'local',
-      path: file.path ?? '',
+      imagePath: picked.path,
+      tags: [],
     );
 
-    await _store.addAudioTrack(track);
+    await _store.addGalleryItem(item);
     setState(() {});
   }
 
-  void _showYouTubeDialog() {
-    final ctrl = TextEditingController();
-    showDialog(context: context, builder: (_) => AlertDialog(
+  void _showImageOptions(GalleryItem item) {
+    showModalBottomSheet(
+      context: context,
       backgroundColor: AppColors.audioSurface,
-      title: const Text('Add YouTube URL', style: TextStyle(color: Colors.white)),
-      content: TextField(
-        controller: ctrl,
-        style: const TextStyle(color: Colors.white),
-        decoration: InputDecoration(
-          hintText: 'https://youtube.com/watch?v=...',
-          hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Colors.white12)),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Colors.white12)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.audioAccent1)),
-        ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _ImageOptionsSheet(
+        item: item,
+        tags: _tags.where((t) => t != 'All').toList(),
+        onTagsUpdated: (updatedTags) async {
+          item.tags = updatedTags;
+          await _store.addGalleryItem(item);
+          setState(() {});
+        },
+        onDelete: () async {
+          await _store.deleteGalleryItem(item.id);
+          setState(() {});
+          Navigator.pop(context);
+        },
       ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: Colors.white38))),
-        TextButton(onPressed: () async {
-          if (ctrl.text.isNotEmpty) {
-            final track = AudioTrack(id: Uuid().v4(), title: 'YouTube Track', source: 'youtube', path: ctrl.text);
-            await _store.addAudioTrack(track);
-            setState(() {});
-            Navigator.pop(context);
-          }
-        }, child: const Text('Add', style: TextStyle(color: AppColors.audioAccent1))),
-      ],
-    ));
-  }
-
-  Future<void> _playTrack(int index) async {
-    final tracks = _store.audioTracks;
-    if (index >= tracks.length) return;
-    final track = tracks[index];
-    setState(() { _currentIndex = index; _showPlayer = true; });
-    try {
-      if (track.source == 'local') {
-        await _player.setFilePath(track.path);
-      }
-      await _player.play();
-    } catch (e) {
-      // Handle playback error
-    }
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Theme(
-      data: AppTheme.audioTheme,
-      child: Scaffold(
-        backgroundColor: AppColors.audioBg,
-        body: _showPlayer ? _buildFullPlayer() : _buildLibrary(),
-      ),
-    );
-  }
-
-  Widget _buildLibrary() {
-    final tracks = _store.audioTracks;
-    return SafeArea(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-            child: Row(children: [
-              IconButton(icon: const Icon(Icons.arrow_back_rounded, color: Colors.white), onPressed: () => Navigator.pop(context), padding: EdgeInsets.zero),
-              const SizedBox(width: 8),
-              const Text('Audio Library', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.white)),
-            ]),
-          ),
-          const SizedBox(height: 4),
-          Padding(
-            padding: const EdgeInsets.only(left: 52),
-            child: Text('Your writing soundtrack', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13)),
-          ),
-          const SizedBox(height: 16),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Container(height: 2,
-              decoration: const BoxDecoration(gradient: LinearGradient(colors: [AppColors.audioAccent1, AppColors.audioAccent2]))),
-          ),
-          const SizedBox(height: 20),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(children: [
-              GestureDetector(
-                onTap: _addLocalFile,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [AppColors.audioAccent1, AppColors.audioAccent2]),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [BoxShadow(color: AppColors.audioAccent1.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 4))],
-                  ),
-                  child: const Row(children: [
-                    Icon(Icons.add_rounded, color: Colors.white, size: 18),
-                    SizedBox(width: 6),
-                    Text('Add Song', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                  ]),
-                ),
-              ),
-              const SizedBox(width: 12),
-              GestureDetector(
-                onTap: _showYouTubeDialog,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: AppColors.audioSurface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.audioAccent1.withOpacity(0.4)),
-                  ),
-                  child: const Row(children: [
-                    Icon(Icons.link_rounded, color: AppColors.audioAccent2, size: 18),
-                    SizedBox(width: 6),
-                    Text('YouTube URL', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w500, fontSize: 13)),
-                  ]),
-                ),
-              ),
-            ]),
-          ),
-          const SizedBox(height: 24),
-          Expanded(
-            child: tracks.isEmpty
-                ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Icon(Icons.music_off_rounded, color: AppColors.audioAccent1.withOpacity(0.3), size: 64),
-                    const SizedBox(height: 16),
-                    Text('No tracks yet', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 16)),
-                    const SizedBox(height: 8),
-                    Text('Tap Add Song to import from your device', style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 13)),
-                  ]))
-                : ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    itemCount: tracks.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (context, i) {
-                      final track = tracks[i];
-                      final isActive = _currentIndex == i && _showPlayer;
-                      return GestureDetector(
-                        onTap: () => _playTrack(i),
-                        onLongPress: () {
-                          showDialog(context: context, builder: (_) => AlertDialog(
-                            backgroundColor: AppColors.audioSurface,
-                            title: Text(track.title, style: const TextStyle(color: Colors.white)),
-                            actions: [
-                              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: Colors.white38))),
-                              TextButton(onPressed: () async {
-                                await _store.deleteAudioTrack(track.id);
-                                setState(() {});
-                                Navigator.pop(context);
-                              }, child: const Text('Delete', style: TextStyle(color: Colors.red))),
-                            ],
-                          ));
-                        },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.all(16),
+    return Scaffold(
+      backgroundColor: AppColors.audioBg,
+      body: FadeTransition(
+        opacity: _fadeAnim,
+        child: Column(
+          children: [
+            Expanded(
+              child: CustomScrollView(
+                slivers: [
+                  SliverAppBar(
+                    backgroundColor: AppColors.audioBg,
+                    elevation: 0,
+                    expandedHeight: 110,
+                    floating: true,
+                    leading: IconButton(
+                      icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    actions: [
+                      GestureDetector(
+                        onTap: _addImage,
+                        child: Container(
+                          margin: const EdgeInsets.only(right: 16),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                           decoration: BoxDecoration(
-                            color: isActive ? AppColors.audioAccent1.withOpacity(0.15) : AppColors.audioSurface,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: isActive ? AppColors.audioAccent1 : Colors.white12),
+                            gradient: const LinearGradient(colors: [AppColors.audioAccent1, AppColors.audioAccent2]),
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                          child: Row(children: [
-                            Container(
-                              width: 48, height: 48,
-                              decoration: BoxDecoration(
-                                gradient: isActive ? const LinearGradient(colors: [AppColors.audioAccent1, AppColors.audioAccent2]) : null,
-                                color: isActive ? null : Colors.white.withOpacity(0.08),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Icon(isActive && _isPlaying ? Icons.equalizer_rounded : Icons.music_note_rounded, color: Colors.white, size: 22),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                              Text(track.title, style: TextStyle(color: Colors.white, fontWeight: isActive ? FontWeight.w700 : FontWeight.w500, fontSize: 14)),
-                              Text(track.source == 'youtube' ? 'YouTube' : track.artist,
-                                  style: TextStyle(color: Colors.white.withOpacity(0.45), fontSize: 12)),
-                            ])),
-                            Icon(Icons.play_arrow_rounded, color: isActive ? AppColors.audioAccent1 : Colors.white30, size: 22),
+                          child: const Row(children: [
+                            Icon(Icons.add_photo_alternate_rounded, color: Colors.white, size: 18),
+                            SizedBox(width: 6),
+                            Text('Add', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
                           ]),
                         ),
-                      );
-                    },
+                      ),
+                    ],
+                    flexibleSpace: const FlexibleSpaceBar(
+                      titlePadding: EdgeInsets.only(left: 20, bottom: 16),
+                      title: Text('Gallery', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: Colors.white)),
+                    ),
                   ),
-          ),
-        ],
-      ),
-    );
-  }
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    sliver: SliverList(
+                      delegate: SliverChildListDelegate([
+                        Container(height: 2,
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(colors: [AppColors.audioAccent1, AppColors.audioAccent2]),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
 
-  Widget _buildFullPlayer() {
-    final tracks = _store.audioTracks;
-    final track = tracks.isNotEmpty && _currentIndex < tracks.length ? tracks[_currentIndex] : null;
-    final progress = _duration.inMilliseconds > 0 ? _position.inMilliseconds / _duration.inMilliseconds : 0.0;
+                        // Tag filters
+                        SizedBox(
+                          height: 36,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _tags.length,
+                            separatorBuilder: (_, __) => const SizedBox(width: 8),
+                            itemBuilder: (context, i) {
+                              final tag = _tags[i];
+                              final selected = _selectedTag == tag;
+                              return GestureDetector(
+                                onTap: () => setState(() => _selectedTag = tag),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  decoration: BoxDecoration(
+                                    gradient: selected ? const LinearGradient(colors: [AppColors.audioAccent1, AppColors.audioAccent2]) : null,
+                                    color: selected ? null : AppColors.audioSurface,
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(color: selected ? Colors.transparent : Colors.white12),
+                                  ),
+                                  child: Center(child: Text(tag,
+                                      style: TextStyle(color: Colors.white, fontSize: 13,
+                                          fontWeight: selected ? FontWeight.w700 : FontWeight.w400))),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: RadialGradient(
-          center: Alignment.topCenter,
-          radius: 1.5,
-          colors: [AppColors.audioAccent1.withOpacity(0.4), AppColors.audioBg],
+                        const SizedBox(height: 20),
+
+                        // Image grid
+                        _filteredItems.isEmpty
+                            ? Container(
+                                height: 200,
+                                decoration: BoxDecoration(
+                                  color: AppColors.audioSurface,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: AppColors.audioAccent1.withOpacity(0.2)),
+                                ),
+                                child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                                  Icon(Icons.photo_library_outlined, color: AppColors.audioAccent1.withOpacity(0.5), size: 48),
+                                  const SizedBox(height: 12),
+                                  Text('No images yet', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 15)),
+                                  const SizedBox(height: 6),
+                                  Text('Tap Add to bring in visual inspiration',
+                                      style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 12)),
+                                ]),
+                              )
+                            : GridView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 3,
+                                  crossAxisSpacing: 8,
+                                  mainAxisSpacing: 8,
+                                ),
+                                itemCount: _filteredItems.length,
+                                itemBuilder: (context, i) {
+                                  final item = _filteredItems[i];
+                                  return GestureDetector(
+                                    onLongPress: () => _showImageOptions(item),
+                                    child: Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(10),
+                                          child: Image.file(File(item.imagePath), fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) => Container(color: AppColors.audioSurface,
+                                                child: const Icon(Icons.broken_image_rounded, color: Colors.white30))),
+                                        ),
+                                        if (item.tags.isNotEmpty)
+                                          Positioned(bottom: 4, left: 4,
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.audioAccent1.withOpacity(0.8),
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: Text(item.tags.first, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w600)),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+
+                        const SizedBox(height: 20),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: AppColors.audioAccent1.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: AppColors.audioAccent1.withOpacity(0.3)),
+                          ),
+                          child: Row(children: [
+                            const Icon(Icons.push_pin_rounded, color: AppColors.audioAccent1, size: 20),
+                            const SizedBox(width: 10),
+                            Expanded(child: Text('Long press any image to tag it or pin it to a scene.',
+                                style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 13))),
+                          ]),
+                        ),
+                        const SizedBox(height: 100),
+                      ]),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const PersistentAudioBar(),
+          ],
         ),
       ),
-      child: SafeArea(
-        child: Column(children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            child: Row(children: [
-              IconButton(icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 30),
-                  onPressed: () => setState(() => _showPlayer = false)),
-              const Spacer(),
-              const Text('Now Playing', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500)),
-              const Spacer(),
-              IconButton(icon: const Icon(Icons.queue_music_rounded, color: Colors.white70),
-                  onPressed: () => setState(() => _showPlayer = false)),
-            ]),
-          ),
-          const Spacer(),
-          AnimatedBuilder(
-            animation: _pulseController,
-            builder: (context, child) => Transform.scale(
-              scale: _isPlaying ? 0.95 + (_pulseController.value * 0.05) : 0.85,
-              child: child,
-            ),
-            child: Container(
-              width: 260, height: 260,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
-                    colors: [AppColors.audioAccent1, AppColors.audioAccent2]),
-                borderRadius: BorderRadius.circular(28),
-                boxShadow: [BoxShadow(color: AppColors.audioAccent1.withOpacity(0.5), blurRadius: 40, spreadRadius: 5)],
-              ),
-              child: const Icon(Icons.music_note_rounded, color: Colors.white, size: 80),
-            ),
-          ),
-          const Spacer(),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Column(children: [
-              Row(children: [
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(track?.title ?? 'No track', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
-                  Text(track?.artist ?? '', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14)),
-                ])),
-              ]),
-              const SizedBox(height: 28),
-              SliderTheme(
-                data: SliderThemeData(
-                  thumbColor: Colors.white,
-                  activeTrackColor: AppColors.audioAccent1,
-                  inactiveTrackColor: Colors.white.withOpacity(0.15),
-                  trackHeight: 3,
-                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                  overlayShape: SliderComponentShape.noOverlay,
-                ),
-                child: Slider(
-                  value: progress.clamp(0.0, 1.0),
-                  onChanged: (val) async {
-                    final pos = Duration(milliseconds: (val * _duration.inMilliseconds).round());
-                    await _player.seek(pos);
-                  },
-                ),
-              ),
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                Text(_formatDuration(_position), style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12)),
-                Text(_formatDuration(_duration), style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12)),
-              ]),
-              const SizedBox(height: 24),
-              Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-                IconButton(icon: Icon(Icons.skip_previous_rounded, color: Colors.white.withOpacity(0.8), size: 36),
-                    onPressed: () => _playTrack((_currentIndex - 1).clamp(0, tracks.length - 1))),
-                GestureDetector(
-                  onTap: () async {
-                    if (_isPlaying) await _player.pause();
-                    else await _player.play();
-                  },
-                  child: Container(
-                    width: 70, height: 70,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(colors: [AppColors.audioAccent1, AppColors.audioAccent2]),
-                    ),
-                    child: Icon(_isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Colors.white, size: 36),
-                  ),
-                ),
-                IconButton(icon: Icon(Icons.skip_next_rounded, color: Colors.white.withOpacity(0.8), size: 36),
-                    onPressed: () => _playTrack((_currentIndex + 1) % (tracks.isEmpty ? 1 : tracks.length))),
-              ]),
-              const SizedBox(height: 32),
-            ]),
-          ),
-        ]),
-      ),
     );
   }
+}
 
-  String _formatDuration(Duration d) {
-    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$m:$s';
+class _ImageOptionsSheet extends StatefulWidget {
+  final GalleryItem item;
+  final List<String> tags;
+  final Function(List<String>) onTagsUpdated;
+  final VoidCallback onDelete;
+
+  const _ImageOptionsSheet({required this.item, required this.tags, required this.onTagsUpdated, required this.onDelete});
+
+  @override
+  State<_ImageOptionsSheet> createState() => _ImageOptionsSheetState();
+}
+
+class _ImageOptionsSheetState extends State<_ImageOptionsSheet> {
+  late List<String> _selectedTags;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedTags = List.from(widget.item.tags);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Image Options', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 16),
+        const Text('Tags', style: TextStyle(color: Colors.white70, fontSize: 13)),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          children: widget.tags.map((tag) {
+            final selected = _selectedTags.contains(tag);
+            return GestureDetector(
+              onTap: () {
+                setState(() {
+                  if (selected) _selectedTags.remove(tag);
+                  else _selectedTags.add(tag);
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: selected ? AppColors.audioAccent1.withOpacity(0.2) : AppColors.audioBg,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: selected ? AppColors.audioAccent1 : Colors.white12),
+                ),
+                child: Text(tag, style: TextStyle(color: selected ? AppColors.audioAccent1 : Colors.white70, fontWeight: FontWeight.w600)),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 20),
+        Row(children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: widget.onDelete,
+              child: Container(
+                height: 48,
+                decoration: BoxDecoration(color: Colors.red.withOpacity(0.2), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.red.withOpacity(0.4))),
+                child: const Center(child: Text('Delete', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600))),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                widget.onTagsUpdated(_selectedTags);
+                Navigator.pop(context);
+              },
+              child: Container(
+                height: 48,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [AppColors.audioAccent1, AppColors.audioAccent2]),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Center(child: Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700))),
+              ),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 20),
+      ]),
+    );
   }
 }
